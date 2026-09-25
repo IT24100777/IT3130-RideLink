@@ -8,6 +8,7 @@ import com.ridelink.account.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,7 +42,9 @@ public class AccountController {
         return ResponseEntity.ok(accountService.updateProfile(callerId, request));
     }
 
-    @Operation(summary = "Fetch basic account info by id (used by other RideLink services, e.g. to confirm a driver/passenger exists)")
+    @Operation(summary = "Fetch account info by id - only the account owner or an admin may call this. " +
+            "Other RideLink services should call this using an admin/service-level token, not a passenger's own token.")
+    @PreAuthorize("hasRole('ADMIN') or #id.toString() == authentication.name")
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> getAccount(@PathVariable UUID id) {
         return ResponseEntity.ok(accountService.getById(id));

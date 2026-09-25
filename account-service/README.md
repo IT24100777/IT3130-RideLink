@@ -23,7 +23,7 @@ for defaults). Nothing sensitive is committed to the repository.
 | `DB_URL` | JDBC URL for this service's own database | `jdbc:postgresql://localhost:5432/ridelink_account` |
 | `DB_USERNAME` | Database user | `postgres` |
 | `DB_PASSWORD` | Database password | `postgres` |
-| `RIDELINK_JWT_SECRET` | HMAC signing secret. **Must be identical across all four RideLink services** so they can verify each other's tokens without calling back to this service. | a long random string, 32+ bytes |
+| `RIDELINK_JWT_SECRET` | **Required** - HMAC signing secret, no default. The app will not start without it. **Must be identical across all four RideLink services** so they can verify each other's tokens without calling back to this service. | a long random string, 32+ bytes |
 | `RIDELINK_JWT_EXPIRATION_MINUTES` | Access token lifetime | `60` |
 | `SERVER_PORT` | HTTP port | `8081` |
 
@@ -74,7 +74,7 @@ no PostgreSQL instance is required to run the test suite. Covers:
 | POST | `/api/accounts/login` | Public | Authenticate, receive a JWT |
 | GET | `/api/accounts/me` | Any authenticated user | View own profile |
 | PUT | `/api/accounts/me` | Any authenticated user | Update own profile |
-| GET | `/api/accounts/{id}` | Any authenticated user | Fetch basic account info (used by other services) |
+| GET | `/api/accounts/{id}` | Owner or admin only | Fetch account info by id |
 | GET | `/api/accounts?role=` | Admin | List accounts, optional role filter |
 | PATCH | `/api/accounts/{id}/status` | Admin | Suspend / reactivate / deactivate an account |
 
@@ -89,8 +89,24 @@ Account Service is the **only** service that issues JWTs. The other three RideLi
 services loosely coupled and avoids Account Service becoming a bottleneck / single point of
 failure for every authenticated call in the system.
 
-A service that needs more than what's in the token (e.g. confirming a driver's account is
-still `ACTIVE`) can call `GET /api/accounts/{id}` as a synchronous REST interservice call.
+**`GET /api/accounts/{id}` is restricted to the account owner or an admin** - it is not open to
+any authenticated caller, because it returns personal details (email, phone number). This means
+another RideLink service cannot currently call it using an ordinary passenger/driver token; it
+would need to call it using an **admin-level token**, since there is no separate service-to-service
+authentication mechanism implemented yet.
+
+If a teammate's service needs to look up account details, the options are (pick one and document
+it in the report's communication-interface section, since this is exactly the kind of choice
+the assignment asks you to justify):
+- Call this endpoint using an admin credential/token issued by this service (simplest, but couples
+  that service to holding an admin login)
+- Add a dedicated internal/service-role (e.g. a `SERVICE` role, or a separate static API key
+  checked in a filter) that only the other three services use for machine-to-machine calls
+- Have Account Service publish only the non-sensitive fields (id, role, status) on a separate,
+  more open endpoint, keeping the full-detail endpoint owner/admin-only
+
+None of these is implemented yet beyond the admin-token option above - this is a design decision
+for the group to make and justify together.
 
 ## Sample test data
 
